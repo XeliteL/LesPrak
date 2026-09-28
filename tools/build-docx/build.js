@@ -3,7 +3,7 @@ const fs = require("fs")
 const path = require("path")
 const {
   Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell,
-  WidthType, BorderStyle, ShadingType, LevelFormat, Footer, PageNumber, TableOfContents, SectionType,
+  WidthType, BorderStyle, ShadingType, LevelFormat, Footer, PageNumber, TableOfContents, SectionType, TabStopType,
 } = require("docx")
 
 const SRC = path.resolve(__dirname, "../../docs/stage2")
@@ -278,17 +278,28 @@ const doc = new Document({
   features: { updateFields: true },
   styles: {
     default: { document: { run: { font: FONT, size: PT14 }, paragraph: { spacing: { line: LINE15 } } } },
-    paragraphStyles: [1, 2, 3].map((n) => ({
+    paragraphStyles: [
+      // строки содержания: без полужирного, по левому краю, с отточием перед номером страницы
+      ...[1, 2, 3].map((n) => ({
+        id: `TOC${n}`, name: `toc ${n}`, basedOn: "Normal", next: "Normal",
+        run: { font: FONT, size: PT14, bold: false },
+        paragraph: { spacing: { line: LINE15, before: 0, after: 0 }, indent: { left: 0, firstLine: 0 },
+          tabStops: [{ type: TabStopType.RIGHT, position: TEXT_W, leader: "dot" }] },
+      })),
+      ...[1, 2, 3].map((n) => ({
       id: `Heading${n}`, name: `Heading ${n}`, basedOn: "Normal", next: "Normal", quickFormat: true,
       run: { font: FONT, size: [PT18, PT16, PT14][n - 1], bold: true, color: "000000" },
       paragraph: { outlineLevel: n - 1, keepNext: true },
     })),
+    ],
   },
   numbering: {
     config: [
       { reference: "dash", levels: listLevel(LevelFormat.BULLET, "–") },
       { reference: "num", levels: listLevel(LevelFormat.DECIMAL, "%1.") },
-      { reference: "bib", levels: listLevel(LevelFormat.DECIMAL, "%1.") },
+      // список источников: номер с абзацного отступа 1,25 см, перенос строки — от левого поля (образец Д.1)
+      { reference: "bib", levels: [{ level: 0, format: LevelFormat.DECIMAL, text: "%1.", alignment: AlignmentType.LEFT,
+        style: { paragraph: { indent: { left: 0, firstLine: INDENT }, tabStops: [{ type: "left", position: LIST_TEXT }] }, run: { font: FONT, size: PT14 } } }] },
     ],
   },
   sections: [

@@ -1,6 +1,6 @@
 # Перевод фрагмента иностранного источника
 
-**Источник:** What the NAR Settlement Means for Home Buyers and Sellers / National Association of REALTORS®. — 2024. — 24 May. — URL: https://www.nar.realtor/the-facts/what-the-nar-settlement-means-for-home-buyers-and-sellers
+**Источник:** What the NAR Settlement Means for Home Buyers and Sellers / National Association of REALTORS® [Электронный ресурс]. — 2024. URL: https://www.nar.realtor/the-facts/what-the-nar-settlement-means-for-home-buyers-and-sellers (дата обращения: 27.09.2026)
 
 **Почему выбран:** официальный материал крупнейшей профессиональной ассоциации риелторов США о новых правилах работы агентов с покупателями, вступивших в силу 17 августа 2024 года. Текст описывает договор с агентом, раскрытие размера вознаграждения и роль MLS — те же вопросы, что обсуждаются в российском законопроекте о риелторской деятельности.
 
