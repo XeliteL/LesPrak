@@ -1,7 +1,7 @@
 {
   "name": "build-docx",
   "private": true,
-  "description": "Сборка материалов этапа 2 из Markdown в DOCX",
+  "description": "Сборка материалов этапов практики из Markdown в DOCX",
   "scripts": { "build": "node build.js" },
   "dependencies": { "docx": "^9.7.2" }
 }

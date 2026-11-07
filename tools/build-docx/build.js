@@ -4,10 +4,50 @@ const path = require("path")
 const {
   Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell,
   WidthType, BorderStyle, ShadingType, LevelFormat, Footer, PageNumber, TableOfContents, SectionType, TabStopType,
+  ImageRun, PageOrientation,
 } = require("docx")
 
-const SRC = path.resolve(__dirname, "../../docs/stage2")
-const OUT = process.argv[2] || path.join(SRC, "Этап_2.docx")
+// ---------- настройки этапов ----------
+// Запуск: node build.js [номер этапа] [путь к docx]
+const STAGES = {
+  2: {
+    subtitle: "Материалы исследовательского этапа",
+    files: ["00-environment.md", "01-domain.md", "02-history.md", "03-business-process.md", "translation.md"],
+    // подписи таблиц в порядке появления
+    captions: [
+      "Состав инструментального окружения",
+      "Структура репозитория практики",
+      "Нормативные акты, регулирующие работу агентства недвижимости",
+      "Ожидания клиентов от агента по недвижимости",
+      "Участники предметной области",
+      "Шаги бизнес-процесса и возможность их автоматизации",
+      "Глоссарий терминов переведённого фрагмента",
+    ],
+    sources: "sources.md",
+    onlyCited: false,
+  },
+  3: {
+    subtitle: "Материалы аналитического этапа",
+    files: ["01-bpmn.md", "02-automation.md", "03-data-model.md", "04-algorithms.md", "05-implementation.md"],
+    captions: [
+      "Элементы модели процесса в нотации BPMN 2.0",
+      "Автоматизируемые операции бизнес-процесса",
+      "Сущности логической модели данных",
+      "Входные и выходные данные алгоритмов",
+      "Оценка вычислительной сложности алгоритмов",
+      "Время работы алгоритмов при росте объёма данных",
+      "Модули процедурной реализации",
+      "Модульные тесты",
+    ],
+    sources: "../stage2/sources.md", // общий список источников практики
+    onlyCited: true,
+  },
+}
+const STAGE = process.argv[2] || "2"
+const CONF = STAGES[STAGE]
+if (!CONF) { console.error(`нет настроек для этапа ${STAGE}`); process.exit(1) }
+const SRC = path.resolve(__dirname, `../../docs/stage${STAGE}`)
+const OUT = process.argv[3] || path.join(SRC, `Этап_${STAGE}.docx`)
 const TITLE_TOPIC = "Риелторские услуги по продаже жилой недвижимости"
 
 const FONT = "Times New Roman"
@@ -20,29 +60,13 @@ const PAGE_W = 11906, PAGE_H = 16838
 const MARGIN = { top: MM(20), bottom: MM(20), left: MM(30), right: MM(10) }
 const TEXT_W = PAGE_W - MARGIN.left - MARGIN.right
 
-const FILES = [
-  ["00-environment.md", 1],
-  ["01-domain.md", 2],
-  ["02-history.md", 3],
-  ["03-business-process.md", 4],
-  ["translation.md", 5],
-]
-
-// Подписи таблиц в порядке появления: [раздел, название]
-const CAPTIONS = [
-  "Состав инструментального окружения",
-  "Структура репозитория практики",
-  "Нормативные акты, регулирующие работу агентства недвижимости",
-  "Ожидания клиентов от агента по недвижимости",
-  "Участники предметной области",
-  "Шаги бизнес-процесса и возможность их автоматизации",
-  "Глоссарий терминов переведённого фрагмента",
-]
+const FILES = CONF.files.map((f, i) => [f, i + 1])
+const CAPTIONS = CONF.captions
 
 // ---------- источники ----------
 const sources = {}
 const srcOrder = []
-for (const l of fs.readFileSync(path.join(SRC, "sources.md"), "utf8").split("\n")) {
+for (const l of fs.readFileSync(path.join(SRC, CONF.sources), "utf8").split("\n")) {
   const m = l.match(/^(\d+)\.\s+(.*)$/)
   if (m) {
     sources[m[1]] = m[2].replace(/\s*\*\*\[проверить[^\]]*\]\*\*/g, "").trim()
@@ -75,7 +99,7 @@ for (const sec of sections) for (const l of sec) if (typeof l === "string")
   for (const m of l.matchAll(citeRe)) for (const n of m[1].split(";").map((s) => s.trim()))
     if (sources[n] && !map[n]) map[n] = next++
 const uncited = srcOrder.filter((n) => !map[n])
-for (const n of uncited) map[n] = next++
+if (!CONF.onlyCited) for (const n of uncited) map[n] = next++
 const remap = (s) => s.replace(citeRe, (all, g) => {
   const ns = g.split(";").map((x) => x.trim())
   if (!ns.every((n) => sources[n])) return all
@@ -186,6 +210,16 @@ function render(sec) {
       out.push(heading(l.text, l.h)); i++; continue
     }
     if (l.trim() === "") { i++; continue }
+    if (l.startsWith("```")) {
+      i++
+      while (i < sec.length && !(typeof sec[i] === "string" && sec[i].startsWith("```"))) {
+        const t = typeof sec[i] === "string" ? sec[i] : ""
+        out.push(new Paragraph({ spacing: { line: LINE1, before: 0, after: 0 }, keepLines: true,
+          children: [new TextRun({ text: t || " ", font: "Courier New", size: PT12 - 4 })] }))
+        i++
+      }
+      i++; pendingBefore = MM(6); continue
+    }
     if (l.startsWith("|")) {
       const rows = []
       while (i < sec.length && typeof sec[i] === "string" && sec[i].startsWith("|")) rows.push(sec[i++])
@@ -194,6 +228,38 @@ function render(sec) {
       continue
     }
     let m
+    if ((m = l.match(/^!\[(.*)\]\(([^)]+)\)(\{landscape\})?\s*$/))) {
+      figNo++
+      pendingBefore = 0
+      const landscape = !!m[3]
+      const file = path.resolve(SRC, m[2])
+      const fig = []
+      if (fs.existsSync(file)) {
+        const buf = fs.readFileSync(file)
+        const [w, h] = [buf.readUInt32BE(16), buf.readUInt32BE(20)] // заголовок IHDR файла PNG
+        // доступная область, мм: книжная 170 × 225, альбомная 257 × 150 (с запасом на подпись)
+        const [maxW, maxH] = landscape ? [257, 150] : [170, 225]
+        const k = Math.min(maxW / w, maxH / h)
+        const px = (mm) => Math.round((mm / 25.4) * 96)
+        fig.push(new Paragraph({
+          alignment: AlignmentType.CENTER, spacing: { before: MM(6), line: LINE1 }, keepNext: true,
+          children: [new ImageRun({ type: "png", data: buf, transformation: { width: px(w * k), height: px(h * k) } })],
+        }))
+      } else {
+        fig.push(new Paragraph({
+          alignment: AlignmentType.CENTER, spacing: { before: MM(6), line: LINE1 }, keepNext: true,
+          border: { top: { style: BorderStyle.DASHED, size: 6, color: "999999", space: 40 }, bottom: { style: BorderStyle.DASHED, size: 6, color: "999999", space: 40 } },
+          children: [new TextRun({ text: `[вставить рисунок: ${m[2]}]`, font: FONT, size: PT14, italics: true, color: "808080" })],
+        }))
+      }
+      fig.push(new Paragraph({
+        alignment: AlignmentType.CENTER, spacing: { line: LINE1, before: MM(3), after: MM(6) },
+        children: [new TextRun({ text: `Рисунок ${secNum}.${figNo} — ${m[1]}`, font: FONT, size: PT12, bold: true })],
+      }))
+      if (landscape) out.push({ landscape: fig })
+      else out.push(...fig)
+      i++; continue
+    }
     if ((m = l.match(/^\*\*\[Рисунок \d+ — (.*)\]\*\*$/))) {
       figNo++
       pendingBefore = 0
@@ -237,7 +303,7 @@ const right = (t, o = {}) => new Paragraph({
 const titlePage = [
   center("[Титульный лист по утверждённой форме кафедры]", { spacing: { after: MM(40) } }),
   center("ОТЧЁТ ПО УЧЕБНОЙ ПРАКТИКЕ", { bold: true }),
-  center("Материалы исследовательского этапа", { bold: true }),
+  center(CONF.subtitle, { bold: true }),
   center(`Тема: «${TITLE_TOPIC}»`, { spacing: { before: MM(8) } }),
   right("Студент: ____________________", { spacing: { before: MM(50) } }),
   right("Группа: ____________________"),
@@ -274,6 +340,25 @@ const numFooter = new Footer({ children: [new Paragraph({ alignment: AlignmentTy
   children: [new TextRun({ children: [PageNumber.CURRENT], font: FONT, size: PT12 })] })] })
 const emptyFooter = new Footer({ children: [new Paragraph({ children: [] })] })
 
+// основной текст; альбомные рисунки выносятся в отдельные разделы документа
+function bodySections() {
+  const items = [...sections.flatMap(render), ...bib]
+  const res = []
+  let cur = []
+  const flush = () => { if (cur.length) res.push({ properties: { ...pageProps, type: SectionType.NEXT_PAGE }, footers: { default: numFooter }, children: cur }); cur = [] }
+  for (const it of items) {
+    if (it && it.landscape) {
+      flush()
+      res.push({
+        properties: { type: SectionType.NEXT_PAGE, page: { size: { width: PAGE_W, height: PAGE_H, orientation: PageOrientation.LANDSCAPE }, margin: MARGIN } },
+        footers: { default: numFooter }, children: it.landscape,
+      })
+    } else cur.push(it)
+  }
+  flush()
+  return res
+}
+
 const doc = new Document({
   features: { updateFields: true },
   styles: {
@@ -305,11 +390,7 @@ const doc = new Document({
   sections: [
     // титул и содержание — в общей нумерации, но без номера страницы
     { properties: pageProps, footers: { default: emptyFooter }, children: [...titlePage, ...toc] },
-    {
-      properties: { ...pageProps, type: SectionType.NEXT_PAGE },
-      footers: { default: numFooter },
-      children: [...sections.flatMap(render), ...bib],
-    },
+    ...bodySections(),
   ],
 })
 
