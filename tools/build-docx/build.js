@@ -59,6 +59,19 @@ const STAGES = {
     sources: ["../stage2/sources.md", "sources.md"], // общий список и источники этапа 4
     onlyCited: true,
   },
+  5: {
+    subtitle: "Материалы проектного этапа и тестирования",
+    files: ["01-physical-model.md", "02-testing.md", "03-storage.md", "04-solution.md"],
+    captions: [
+      "Выбор типов данных",
+      "Основные тестовые сценарии",
+      "Выявленные и устранённые ошибки",
+      "Показатели качества кода",
+      "Структура репозитория",
+    ],
+    sources: ["../stage2/sources.md", "../stage4/sources.md"],
+    onlyCited: true,
+  },
 }
 const STAGE = process.argv[2] || "2"
 const CONF = STAGES[STAGE]
@@ -109,16 +122,16 @@ function prepare(file, num) {
 const sections = FILES.map(([f, n]) => prepare(f, n))
 
 // перенумерация ссылок по порядку первого упоминания
-const citeRe = /\[(\d+(?:\s*;\s*\d+)*)\]/g
+const citeRe = /\[(\d+(?:\s*[;,]\s*\d+)*)\]/g // [1], [1; 2], [1, 2]
 const map = {}
 let next = 1
 for (const sec of sections) for (const l of sec) if (typeof l === "string")
-  for (const m of l.matchAll(citeRe)) for (const n of m[1].split(";").map((s) => s.trim()))
+  for (const m of l.matchAll(citeRe)) for (const n of m[1].split(/[;,]/).map((s) => s.trim()))
     if (sources[n] && !map[n]) map[n] = next++
 const uncited = srcOrder.filter((n) => !map[n])
 if (!CONF.onlyCited) for (const n of uncited) map[n] = next++
 const remap = (s) => s.replace(citeRe, (all, g) => {
-  const ns = g.split(";").map((x) => x.trim())
+  const ns = g.split(/[;,]/).map((x) => x.trim())
   if (!ns.every((n) => sources[n])) return all
   return "[" + ns.map((n) => map[n]).sort((a, b) => a - b).join(", ") + "]"
 })
@@ -359,7 +372,7 @@ const emptyFooter = new Footer({ children: [new Paragraph({ children: [] })] })
 
 // основной текст; альбомные рисунки выносятся в отдельные разделы документа
 function bodySections() {
-  const items = [...sections.flatMap(render), ...bib]
+  const items = [...sections.flatMap(render), ...(next > 1 ? bib : [])]
   const res = []
   let cur = []
   const flush = () => { if (cur.length) res.push({ properties: { ...pageProps, type: SectionType.NEXT_PAGE }, footers: { default: numFooter }, children: cur }); cur = [] }

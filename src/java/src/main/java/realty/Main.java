@@ -96,7 +96,7 @@ public final class Main {
                 continue;
             }
             DealReport r = inspector.inspect(deal, TODAY);
-            System.out.printf("Сделка %d, подписание %s: %s к подписанию%n", deal.id(), deal.signingDate(),
+            System.out.printf("Сделка %d, подписание %s: %s к подписанию%n", deal.id(), deal.signingDate() != null ? deal.signingDate() : "не назначено",
                     r.isReady() ? "готова" : "не готова");
             for (IssueKind kind : List.of(IssueKind.MISSING, IssueKind.EXPIRED, IssueKind.EXPIRING,
                     IssueKind.OVERDUE_STAGE)) {

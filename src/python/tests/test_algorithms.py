@@ -99,6 +99,28 @@ class TestMatching(unittest.TestCase):
     def test_no_matches(self):
         self.assertEqual(match_objects(self.REQ, [], top_n=5), [])
 
+    def test_filter_bounds(self):
+        # граничные значения, добавленные по результатам измерения покрытия на этапе 5
+        req = dict(self.REQ, budget_min=8_000_000, not_last_floor=True)
+        self.assertTrue(passes_filters(req, self.obj(1, 8_000_000)))                 # ровно нижняя граница
+        self.assertFalse(passes_filters(req, self.obj(2, 7_999_999)))                # ниже бюджета
+        self.assertFalse(passes_filters(req, self.obj(3, 9_000_000, rooms=3)))       # другое число комнат
+        self.assertFalse(passes_filters(req, self.obj(4, 9_000_000, floor=10)))      # последний этаж
+        self.assertTrue(passes_filters(req, self.obj(5, 9_000_000, area=40.0)))      # ровно минимальная площадь
+
+    def test_any_district_and_heap_replacement(self):
+        req = dict(self.REQ, districts=[])
+        # лучший объект идёт последним: куча размера 1 должна заменить им худший
+        objects = [self.obj(1, 10_400_000, area=52.0), self.obj(2, 9_000_000, area=52.0, district="Бутово Северное")]
+        result = match_objects(req, objects, top_n=1)
+        self.assertEqual([(s, o["id"]) for s, o in result], [(100.0, 2)])
+
+    def test_empty_optional_limits(self):
+        # ошибка, найденная на этапе 5: null в необязательных полях заявки вызывал TypeError
+        req = dict(self.REQ, budget_min=None, area_min=None)
+        self.assertTrue(passes_filters(req, self.obj(1, 9_000_000, area=30.0)))
+        self.assertEqual(len(match_objects(req, [self.obj(1, 9_000_000)])), 1)
+
 
 class TestDocuments(unittest.TestCase):
     TYPES = [
@@ -145,6 +167,17 @@ class TestDocuments(unittest.TestCase):
         r = check_deal(self.deal(price=5_000_000, stages=stages), self.TYPES, [], TODAY)
         self.assertTrue(r["aml_control"])
         self.assertEqual(r["overdue_stages"], ["Одобрение"])
+
+    def test_signing_date_not_set(self):
+        # ошибка, найденная на этапе 5: сделка без даты подписания вызывала KeyError;
+        # теперь сроки документов проверяются на текущую дату
+        deal = self.deal()
+        del deal["signing_date"]
+        docs = [{"type": "egrn", "received": "2026-10-01"}, {"type": "passport", "received": "2026-10-01"}]
+        r = check_deal(deal, self.TYPES, docs, TODAY)      # выписка действует до 31.10
+        self.assertEqual(r["expired"], ["Выписка из ЕГРН"])
+        docs[0]["received"] = "2026-10-20"                 # действует до 19.11
+        self.assertTrue(check_deal(deal, self.TYPES, docs, TODAY)["ready"])
 
 
 class TestCommission(unittest.TestCase):

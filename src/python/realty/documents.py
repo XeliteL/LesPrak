@@ -43,7 +43,8 @@ def index_documents(documents):
 def check_deal(deal, doc_types, documents, today):
     """Проверяет готовность сделки к подписанию. Возвращает словарь с результатом."""
     today = parse_date(today)
-    signing = parse_date(deal["signing_date"])
+    # дата подписания может быть ещё не назначена: тогда сроки документов проверяются на сегодня
+    signing = parse_date(deal["signing_date"]) if deal.get("signing_date") else today
     index = index_documents(documents)
 
     missing, expired, expiring = [], [], []

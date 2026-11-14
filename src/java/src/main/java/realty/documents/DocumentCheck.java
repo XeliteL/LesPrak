@@ -40,6 +40,8 @@ public final class DocumentCheck implements DealCheck {
     @Override
     public void check(Deal deal, LocalDate today, DealReport report) {
         Map<String, Document> index = index(deal.documents());
+        // дата подписания может быть ещё не назначена: тогда сроки документов проверяются на сегодня
+        LocalDate signing = deal.signingDate() != null ? deal.signingDate() : today;
         for (DocumentType type : requiredTypes(deal)) {
             Document doc = index.get(type.code());
             if (doc == null) {
@@ -50,7 +52,7 @@ public final class DocumentCheck implements DealCheck {
             if (until.isEmpty()) {
                 continue;
             }
-            if (until.get().isBefore(deal.signingDate())) {
+            if (until.get().isBefore(signing)) {
                 report.add(IssueKind.EXPIRED, type.name());
             } else if (!until.get().isAfter(today.plusDays(WARN_DAYS))) {
                 report.add(IssueKind.EXPIRING, type.name());

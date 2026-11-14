@@ -31,6 +31,7 @@ dist-ssr
 # Python
 __pycache__/
 *.pyc
+.coverage
 
 # Java
 src/java/target/

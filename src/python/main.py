@@ -45,7 +45,7 @@ def show_documents(data):
         if deal.get("status") != "in_progress":
             continue
         r = check_deal(deal, data["doc_types"], deal["documents"], TODAY)
-        print(f"Сделка {deal['id']}, подписание {deal['signing_date']}: "
+        print(f"Сделка {deal['id']}, подписание {deal.get('signing_date') or 'не назначено'}: "
               f"{'готова' if r['ready'] else 'не готова'} к подписанию")
         for title, key in (("Не хватает", "missing"), ("Просрочены к подписанию", "expired"),
                            ("Скоро истекают", "expiring"), ("Просрочены этапы", "overdue_stages")):

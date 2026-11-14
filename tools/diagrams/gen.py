@@ -1,9 +1,10 @@
-"""Генерация диаграмм draw.io для этапов 3 и 4.
+"""Генерация диаграмм draw.io для этапов 3–5.
 
-Запуск из корня репозитория: python tools/diagrams/gen.py [bpmn|er|algorithms|uml ...]
+Запуск из корня репозитория: python tools/diagrams/gen.py [bpmn|er|physical|algorithms|uml ...]
 Создаёт:
     diagrams/bpmn-prodazha-kvartiry.drawio — модель процесса в нотации BPMN 2.0 (3 страницы);
     diagrams/er-logicheskaya-model.drawio  — логическая модель данных (нотация «вороньи лапки»);
+    diagrams/er-fizicheskaya-model.drawio  — физическая модель данных по src/sql/schema.sql (этап 5);
     diagrams/algoritmy.drawio              — схемы алгоритмов по ГОСТ 19.701-90 (5 страниц);
     diagrams/uml-klassy.drawio             — UML-диаграммы классов ООП-реализации (4 страницы).
 Файлы можно дорабатывать вручную в draw.io; повторный запуск перезапишет их.
@@ -269,22 +270,26 @@ GRID = [
 ER_W, ROW_H, HEAD_H, GAP_X, GAP_Y = 210, 19, 26, 100, 90
 
 
-def er():
-    p = Page("Логическая модель данных")
+def er(entities=None, title=None, page="Логическая модель данных", filename="er-logicheskaya-model.drawio",
+       w=ER_W):
+    """ER-диаграмма. По умолчанию — логическая модель; physical() передаёт таблицы из schema.sql."""
+    entities = entities or ENTITIES
+    title = title or {}
+    p = Page(page)
     ids, box = {}, {}
     row_top, row_bottom = [], []
     y = 0
     for row in GRID:
-        h_row = max(HEAD_H + ROW_H * len(ENTITIES[e]) for e in row if e)
+        h_row = max(HEAD_H + ROW_H * len(entities[e]) for e in row if e)
         row_top.append(y)
         row_bottom.append(y + h_row)
         for c, name in enumerate(row):
             if not name:
                 continue
-            attrs = ENTITIES[name]
-            x = c * (ER_W + GAP_X)
+            attrs = entities[name]
+            x = c * (w + GAP_X)
             h = HEAD_H + ROW_H * len(attrs)
-            eid = p.vertex(name, x, y, ER_W, h,
+            eid = p.vertex(title.get(name, name), x, y, w, h,
                            FONT + "swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=%d;"
                            "horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;"
                            "marginBottom=0;html=1;fontSize=13;fillColor=#f5f5f5;" % HEAD_H)
@@ -299,14 +304,14 @@ def er():
                 p.cells.append(
                     f'<mxCell id="{eid}a{i}" value="{escape(text)}" style="{FONT}text;html=1;strokeColor=none;'
                     f'fillColor=none;align=left;verticalAlign=middle;spacingLeft=6;fontSize=12;" vertex="1" '
-                    f'parent="{eid}"><mxGeometry y="{HEAD_H + i * ROW_H}" width="{ER_W}" height="{ROW_H}" '
+                    f'parent="{eid}"><mxGeometry y="{HEAD_H + i * ROW_H}" width="{w}" height="{ROW_H}" '
                     f'as="geometry"/></mxCell>')
             ids[name] = eid
-            box[name] = (x, y, ER_W, h)
+            box[name] = (x, y, w, h)
         y += h_row + GAP_Y
 
     def xch(c, off=0):   # вертикальный коридор справа от колонки c
-        return c * (ER_W + GAP_X) + ER_W + GAP_X / 2 + off
+        return c * (w + GAP_X) + w + GAP_X / 2 + off
 
     def ych(r, off=0):   # горизонтальный коридор под строкой r
         return row_bottom[r] + GAP_Y / 2 + off
@@ -344,7 +349,7 @@ def er():
           (xch(0, 0), at("Договор_с_продавцом", 0, 0.25)[1])]),
         ("Договор_с_продавцом", "Объявление", (0, 0.6), (0.5, 1),
          [(at("Объявление", 0.5, 1)[0], at("Договор_с_продавцом", 0, 0.6)[1])]),
-        ("Договор_с_продавцом", "Сделка", (1, 0.45), (0, 0.45 * 197 / 235), []),
+        ("Договор_с_продавцом", "Сделка", (1, 0.45), (0, 0.45 * box["Договор_с_продавцом"][3] / box["Сделка"][3]), []),
         ("Клиент", "Сделка", (1, 0.85), (1, 0.9),
          [(xch(4, 0), at("Клиент", 1, 0.85)[1]), (xch(4, 0), at("Сделка", 1, 0.9)[1])]),
         ("Сделка", "Начисление", (1, 0.3), (0, 0.5), []),
@@ -356,7 +361,60 @@ def er():
     ]
     for parent, child, ex, en, pts in routes:
         p.edge(ids[parent], ids[child], "", style + pt(*ex, "exit") + pt(*en, "entry"), pts)
-    save("er-logicheskaya-model.drawio", [p])
+    save(filename, [p])
+
+# физические таблицы (schema.sql) -> место сущности логической модели на диаграмме
+PHYS_TABLES = {
+    "client": "Клиент", "employee": "Сотрудник", "district": "Район", "request_district": "Район_заявки",
+    "property": "Объект", "property_owner": "Собственник_объекта", "seller_contract": "Договор_с_продавцом",
+    "advert": "Объявление", "buyer_request": "Заявка_покупателя", "viewing": "Показ", "deal": "Сделка",
+    "deal_stage": "Этап_сделки", "document_type": "Тип_документа", "document": "Документ", "accrual": "Начисление",
+    "market_listing": "Рыночное_предложение",
+}
+SQL_STOP = {"NOT", "NULL", "PRIMARY", "REFERENCES", "CHECK", "DEFAULT", "UNIQUE", "GENERATED"}
+
+
+def read_schema(path):
+    """Таблицы из schema.sql: {таблица: ["PK id integer", "FK district_id smallint", ...]}."""
+    import re
+    tables = {}
+    for name, block in re.findall(r"CREATE TABLE (\w+) \((.*?)\n\);", path.read_text(encoding="utf-8"), re.S):
+        cols, pk, fk = [], set(), set()
+        for line in block.splitlines():
+            line = line.split("--")[0].strip().rstrip(",")
+            if not line:
+                continue
+            m = re.match(r"PRIMARY KEY \(([^)]*)\)", line)
+            if m:
+                pk |= {c.strip() for c in m.group(1).split(",")}
+                continue
+            if line.split()[0] in ("CHECK", "UNIQUE", "PRIMARY", "CONSTRAINT"):
+                continue
+            words = line.split()
+            col, typ = words[0], []
+            for word in words[1:]:
+                if word in SQL_STOP:
+                    break
+                typ.append(word)
+            if "PRIMARY KEY" in line:
+                pk.add(col)
+            if "REFERENCES" in line:
+                fk.add(col)
+            cols.append((col, " ".join(typ).replace(", ", ",")))
+        rows = []
+        for col, typ in cols:
+            key = ",".join(k for k, on in (("PK", col in pk), ("FK", col in fk)) if on)
+            rows.append(f"{key} {col}: {typ}" if key else f"{col}: {typ}")
+        tables[name] = rows
+    return tables
+
+
+def physical():
+    schema = read_schema(OUT.parent / "src" / "sql" / "schema.sql")
+    assert set(schema) == set(PHYS_TABLES), set(schema) ^ set(PHYS_TABLES)
+    entities = {PHYS_TABLES[t]: cols for t, cols in schema.items()}
+    titles = {logical: table for table, logical in PHYS_TABLES.items()}
+    er(entities, titles, "Физическая модель данных", "er-fizicheskaya-model.drawio", w=250)
 
 
 # ======================================================================================
@@ -757,6 +815,6 @@ def uml():
 
 if __name__ == "__main__":
     import sys
-    targets = sys.argv[1:] or ["bpmn", "er", "algorithms", "uml"]
+    targets = sys.argv[1:] or ["bpmn", "er", "physical", "algorithms", "uml"]
     for name in targets:
         globals()[name]()

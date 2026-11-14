@@ -90,4 +90,16 @@ class DocumentsTest {
         assertTrue(r.requiresAmlControl());
         assertEquals(List.of("Одобрение"), r.subjects(IssueKind.OVERDUE_STAGE));
     }
+
+    @Test
+    void signingDateNotSet() {
+        // ошибка, найденная на этапе 5: сделка без даты подписания вызывала NullPointerException;
+        // теперь сроки документов проверяются на текущую дату
+        Deal d = Deal.builder(1, 1, 4_000_000, 0.03)
+                .documents(List.of(doc("egrn", 10, 1), doc("passport", 10, 1))).build();
+        assertEquals(List.of("Выписка из ЕГРН"), INSPECTOR.inspect(d, TODAY).subjects(IssueKind.EXPIRED));
+        d = Deal.builder(1, 1, 4_000_000, 0.03)
+                .documents(List.of(doc("egrn", 10, 20), doc("passport", 10, 1))).build();
+        assertTrue(INSPECTOR.inspect(d, TODAY).isReady());
+    }
 }

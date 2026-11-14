@@ -24,14 +24,14 @@ def passes_filters(request, obj):
         return False
     if obj["price"] > request["budget_max"] * (1 + BUDGET_TOLERANCE):
         return False
-    if obj["price"] < request.get("budget_min", 0):
+    if obj["price"] < (request.get("budget_min") or 0):
         return False
     if obj["rooms"] not in request["rooms"]:
         return False
     districts = request.get("districts") or []
     if districts and obj["district"] not in districts:
         return False
-    if obj["area"] < request.get("area_min", 0):
+    if obj["area"] < (request.get("area_min") or 0):
         return False
     category = floor_category(obj["floor"], obj["floors"])
     if request.get("not_first_floor") and category == "first":
@@ -50,7 +50,7 @@ def match_score(request, obj):
     else:
         price_part = 1 - (obj["price"] - budget) / (budget * BUDGET_TOLERANCE)
     # площадь: запас площади над минимальной до 30 % даёт до полного балла
-    area_min = request.get("area_min", 0)
+    area_min = request.get("area_min") or 0
     if area_min:
         area_part = min(1.0, (obj["area"] - area_min) / (area_min * 0.3))
     else:
