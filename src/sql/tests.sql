@@ -73,6 +73,13 @@ DELETE FROM deal WHERE id = 6;
 SELECT pg_temp.expect('T18 удаление сделки удаляет её этапы и документы',
     NOT EXISTS (SELECT 1 FROM deal_stage WHERE deal_id = 6) AND NOT EXISTS (SELECT 1 FROM document WHERE deal_id = 6));
 
+SELECT pg_temp.expect('T19 у каждого внешнего ключа есть индекс',
+    NOT EXISTS (SELECT 1 FROM pg_constraint c
+                WHERE c.contype = 'f' AND c.connamespace = 'realty'::regnamespace
+                  AND NOT EXISTS (SELECT 1 FROM pg_index i
+                                  WHERE i.indrelid = c.conrelid AND i.indpred IS NULL
+                                    AND (i.indkey::int2[])[0:array_length(c.conkey, 1) - 1] = c.conkey)));
+
 ROLLBACK;
 \o
 \echo 'Все тесты физической модели пройдены'

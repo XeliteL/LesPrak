@@ -211,10 +211,12 @@ COMMENT ON TABLE market_listing IS 'Рыночное предложение с �
 
 CREATE INDEX ON property (district_id);
 CREATE INDEX ON property_owner (client_id);
+CREATE INDEX ON seller_contract (property_id); -- уникальный индекс ниже покрывает только действующие договоры
 CREATE INDEX ON seller_contract (seller_id);
 CREATE INDEX ON seller_contract (agent_id);
 CREATE INDEX ON advert (contract_id);
 CREATE INDEX ON buyer_request (client_id);
+CREATE INDEX ON buyer_request (agent_id);
 CREATE INDEX ON request_district (district_id);
 CREATE INDEX ON viewing (contract_id);
 CREATE INDEX ON viewing (request_id);
@@ -222,6 +224,7 @@ CREATE INDEX ON deal (contract_id);
 CREATE INDEX ON deal (buyer_id);
 CREATE INDEX ON deal_stage (deal_id);
 CREATE INDEX ON document (deal_id, type_code, received_on DESC); -- последний документ каждого типа
+CREATE INDEX ON document (type_code);
 CREATE INDEX ON accrual (employee_id, period);
 -- алгоритм 1: отбор аналогов по району и числу комнат за последние месяцы
 CREATE INDEX ON market_listing (district_id, rooms, published_on);
