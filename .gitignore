@@ -31,3 +31,6 @@ dist-ssr
 # Python
 __pycache__/
 *.pyc
+
+# Java
+src/java/target/

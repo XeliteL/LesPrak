@@ -9,8 +9,9 @@
 - `docs/stageN/` — тексты отчёта по этапам (Markdown) и собранный `Этап_N.docx`
 - `diagrams/` — диаграммы draw.io (BPMN, ER, схемы алгоритмов), `diagrams/png/` — экспорт для отчёта
 - `src/python/` — процедурная реализация алгоритмов (этап 3)
+- `src/java/` — объектно-ориентированная реализация на Java, проект Maven (этап 4)
 - `tools/build-docx/` — сборка отчёта из Markdown в DOCX
-- `tools/diagrams/` — генерация диаграмм (`gen.py`) и экспорт в PNG (`export.sh`)
+- `tools/diagrams/` — генерация диаграмм (`gen.py`: BPMN, ER, схемы алгоритмов, UML-диаграммы классов) и экспорт в PNG (`export.sh`)
 
 ## Команды
 
@@ -23,4 +24,7 @@ python tools/diagrams/gen.py && sh tools/diagrams/export.sh
 
 # Python: демонстрация, тесты, замеры времени
 cd src/python && python main.py && python -m unittest discover -s tests -v && python bench.py
+
+# Java: сборка с тестами, демонстрация, замеры (mvn — из IntelliJ IDEA или отдельной установки Maven)
+cd src/java && mvn package && java -jar target/realty-1.0.jar && java -cp target/classes realty.Bench
 ```

@@ -1,10 +1,11 @@
-"""Генерация диаграмм draw.io для этапа 3.
+"""Генерация диаграмм draw.io для этапов 3 и 4.
 
-Запуск из корня репозитория: python tools/diagrams/gen.py
+Запуск из корня репозитория: python tools/diagrams/gen.py [bpmn|er|algorithms|uml ...]
 Создаёт:
     diagrams/bpmn-prodazha-kvartiry.drawio — модель процесса в нотации BPMN 2.0 (3 страницы);
     diagrams/er-logicheskaya-model.drawio  — логическая модель данных (нотация «вороньи лапки»);
-    diagrams/algoritmy.drawio              — схемы алгоритмов по ГОСТ 19.701-90 (4 страницы).
+    diagrams/algoritmy.drawio              — схемы алгоритмов по ГОСТ 19.701-90 (5 страниц);
+    diagrams/uml-klassy.drawio             — UML-диаграммы классов ООП-реализации (4 страницы).
 Файлы можно дорабатывать вручную в draw.io; повторный запуск перезапишет их.
 """
 
@@ -538,7 +539,224 @@ def algorithms():
     save("algoritmy.drawio", pages)
 
 
+# ======================================================================================
+# UML-диаграммы классов (этап 4)
+# ======================================================================================
+UML_ROW, UML_HEAD, UML_SEP = 15, 24, 10
+UML_EDGE = FONT + "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=11;labelBackgroundColor=#ffffff;"
+UML_REL = {
+    "extends": "endArrow=block;endFill=0;endSize=12;",                     # обобщение
+    "implements": "endArrow=block;endFill=0;endSize=12;dashed=1;",         # реализация
+    "has": "startArrow=diamondThin;startFill=1;startSize=14;endArrow=open;endFill=0;",   # композиция
+    "uses": "startArrow=diamondThin;startFill=0;startSize=14;endArrow=open;endFill=0;",  # агрегация
+    "assoc": "endArrow=open;endFill=0;",                                    # направленная ассоциация
+    "dep": "endArrow=open;endFill=0;dashed=1;",                             # зависимость
+}
+
+
+class Uml(Page):
+    def __init__(self, name):
+        super().__init__(name)
+        self.box = {}
+
+    def cls(self, key, x, y, w, attrs=(), ops=(), stereo=None, abstract=False):
+        """Класс UML: имя (со стереотипом), раздел атрибутов, раздел операций."""
+        head = UML_HEAD + (14 if stereo else 0)
+        name = f"<i>{escape(key)}</i>" if abstract or stereo in ("interface", "sealed interface") else escape(key)
+        title = (f"«{escape(stereo)}»<br>" if stereo else "") + f"<b>{name}</b>"
+        # пустые разделы не показываются (допускается UML), у класса без членов остаётся один пустой раздел
+        sections = [list(sec) for sec in (attrs, ops) if sec] or [[]]
+        h = head + sum(max(1, len(sec)) * UML_ROW + UML_SEP for sec in sections)
+        cid = self.vertex("", x, y, w, h, FONT + "swimlane;fontStyle=0;childLayout=stackLayout;horizontal=1;"
+                          f"startSize={head};horizontalStack=0;resizeParent=1;collapsible=0;html=1;fontSize=12;"
+                          "fillColor=#ffffff;")
+        # заголовок как отдельная надпись: swimlane не умеет многострочный html в value без экранирования
+        self.cells[-1] = self.cells[-1].replace('value=""', f'value="{escape(title)}"', 1)
+        top = head
+        for k, sec in enumerate(sections):
+            text = "<br>".join(r.replace("    ", "&nbsp;" * 4) for r in sec) if sec else "&nbsp;"
+            hh = max(1, len(sec)) * UML_ROW + UML_SEP
+            self.cells.append(
+                f'<mxCell id="{cid}s{k}" value="{escape(text)}" style="{FONT}text;html=1;strokeColor=none;'
+                f'fillColor=none;align=left;verticalAlign=top;spacingLeft=6;spacingTop=2;fontSize=12;" vertex="1" '
+                f'parent="{cid}"><mxGeometry y="{top}" width="{w}" height="{hh}" as="geometry"/></mxCell>')
+            top += hh
+            if k < len(sections) - 1:
+                self.cells.append(
+                    f'<mxCell id="{cid}l{k}" value="" style="line;strokeWidth=1;fillColor=none;align=left;'
+                    f'verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;'
+                    f'points=[];portConstraint=eastwest;" vertex="1" parent="{cid}">'
+                    f'<mxGeometry y="{top - 4}" width="{w}" height="8" as="geometry"/></mxCell>')
+        self.box[key] = (cid, x, y, w, h)
+        return cid
+
+    def rel(self, kind, a, b, label="", exit_=None, entry=None, points=()):
+        """Связь от класса a к классу b (для обобщения и реализации b — предок)."""
+        style = UML_EDGE + UML_REL[kind]
+        if exit_:
+            style += f"exitX={exit_[0]};exitY={exit_[1]};exitDx=0;exitDy=0;"
+        if entry:
+            style += f"entryX={entry[0]};entryY={entry[1]};entryDx=0;entryDy=0;"
+        return self.edge(self.box[a][0], self.box[b][0], label, style, points)
+
+
+def uml():
+    pages = []
+    T, B, L, R = (0.5, 0), (0.5, 1), (0, 0.5), (1, 0.5)
+
+    # ---------------- 1. Модель предметной области
+    p = Uml("Модель предметной области")
+    p.cls("Apartment", 230, 0, 260, [
+        "- district: String", "- rooms: int", "- area: double", "- floor: int", "- floors: int",
+        "- yearBuilt: int"], ["+ floorCategory(): FloorCategory", "+ describe(): String"])
+    p.cls("FloorCategory", 600, 40, 210, ["FIRST", "MIDDLE", "LAST"],
+          ["+ of(floor: int, floors: int): FloorCategory"], stereo="enumeration")
+    p.cls("PricedApartment", 230, 270, 260, ["- id: int", "- price: long"], ["+ unitPrice(): double"],
+          abstract=True)
+    p.cls("MarketListing", 0, 430, 270, ["- published: LocalDate"], ["+ ageDays(today: LocalDate): long"])
+    p.cls("PropertyObject", 330, 430, 230, ["- status: ObjectStatus"], ["+ isOnSale(): boolean"])
+    p.cls("ObjectStatus", 620, 430, 160, ["ACTIVE", "RESERVED", "SOLD"], [], stereo="enumeration")
+    p.cls("BuyerRequest", 0, 610, 300, [
+        "id: int", "client: String", "budgetMin: long", "budgetMax: long", "rooms: Set&lt;Integer&gt;",
+        "districts: List&lt;String&gt;", "areaMin: double", "notFirstFloor: boolean", "notLastFloor: boolean"],
+          ["+ anyDistrict(): boolean", "+ districtRank(district: String): int"], stereo="record")
+    p.cls("Deal", 360, 610, 290, [
+        "- id: int", "- agentId: int", "- price: long", "- rate: double", "- status: DealStatus",
+        "- closed: LocalDate", "- signingDate: LocalDate", "- conditions: Set&lt;DealCondition&gt;"],
+          ["+ builder(id, agentId, price, rate): Builder", "+ has(c: DealCondition): boolean",
+           "+ isClosedIn(month: YearMonth): boolean"])
+    p.cls("DealStatus", 720, 590, 170, ["IN_PROGRESS", "CLOSED", "CANCELLED"], [], stereo="enumeration")
+    p.cls("DealCondition", 720, 760, 170, ["MORTGAGE", "MARRIED_SELLER", "MINOR_OWNERS"], [],
+          stereo="enumeration")
+    p.cls("DealStage", 0, 1000, 290, ["name: String", "due: LocalDate", "done: boolean"],
+          ["+ isOverdue(today: LocalDate): boolean"], stereo="record")
+    p.cls("Document", 350, 1000, 200, ["typeCode: String", "received: LocalDate"], [], stereo="record")
+    p.cls("DocumentType", 610, 1000, 300, ["code: String", "name: String", "requiredIf: DealCondition",
+                                           "validityDays: Integer"],
+          ["+ isRequiredFor(deal: Deal): boolean", "+ validUntil(doc: Document): Optional&lt;LocalDate&gt;"],
+          stereo="record")
+    p.rel("extends", "PricedApartment", "Apartment")
+    p.rel("extends", "MarketListing", "PricedApartment", entry=B)
+    p.rel("extends", "PropertyObject", "PricedApartment", entry=B)
+    p.rel("dep", "Apartment", "FloorCategory")
+    p.rel("assoc", "PropertyObject", "ObjectStatus", "1")
+    p.rel("assoc", "Deal", "DealStatus", "1", exit_=(1, 0.2), entry=L)
+    p.rel("assoc", "Deal", "DealCondition", "0..*", exit_=(1, 0.6), entry=L)
+    p.rel("has", "Deal", "DealStage", "0..*", exit_=(0.2, 1), entry=T)
+    p.rel("has", "Deal", "Document", "0..*", exit_=(0.6, 1), entry=T)
+    p.rel("assoc", "DocumentType", "DealCondition", "0..1", exit_=(0.6, 0), entry=B)
+    p.rel("dep", "DocumentType", "Document", "", exit_=L, entry=R)
+    pages.append(p)
+
+    # ---------------- 2. Алгоритмы 1 и 2
+    p = Uml("Оценка стоимости")
+    p.cls("Valuator", 0, 0, 370, [], ["+ estimate(subject: Apartment, today: LocalDate): ValuationResult"],
+          stereo="interface")
+    p.cls("ComparativeValuator", 0, 140, 400, ["- listings: Collection&lt;MarketListing&gt;",
+                                               "- adjustments: List&lt;PriceAdjustment&gt;"],
+          ["+ standard(listings): ComparativeValuator",
+           "+ selectAnalogs(subject, today): List&lt;MarketListing&gt;",
+           "+ adjustedUnitPrice(subject, analog): double", "+ estimate(subject, today): ValuationResult"])
+    p.cls("PriceAdjustment", 470, 0, 330, [], ["+ apply(unitPrice: double, subject: Apartment,",
+                                               "    analog: MarketListing): double"], stereo="interface")
+    p.cls("BargainDiscount", 470, 160, 150, ["- discount: double"], [])
+    p.cls("FloorAdjustment", 640, 160, 270, ["- coefficients: Map&lt;FloorCategory, Double&gt;"],
+          ["+ standard(): FloorAdjustment"])
+    p.cls("ValuationResult", 30, 400, 200, [], ["+ analogsFound(): int"], stereo="sealed interface")
+    p.cls("Estimate", 0, 540, 220, ["unitPrice: long", "price: long", "priceMin: long", "priceMax: long",
+                                    "analogsFound: int", "analogsUsed: List&lt;Integer&gt;"], [], stereo="record")
+    p.cls("Insufficient", 250, 540, 150, ["analogsFound: int"], [], stereo="record")
+    p.rel("implements", "ComparativeValuator", "Valuator")
+    p.rel("uses", "ComparativeValuator", "PriceAdjustment", "1..*", exit_=(1, 0.25), entry=(0, 0.5))
+    p.rel("implements", "BargainDiscount", "PriceAdjustment", entry=(0.2, 1))
+    p.rel("implements", "FloorAdjustment", "PriceAdjustment", entry=(0.7, 1))
+    p.rel("dep", "ComparativeValuator", "ValuationResult", "", exit_=(0.3, 1), entry=T)
+    p.rel("implements", "Estimate", "ValuationResult", entry=(0.3, 1))
+    p.rel("implements", "Insufficient", "ValuationResult", exit_=T, entry=(0.8, 1))
+    pages.append(p)
+
+    # ---------------- 3. Алгоритм 2
+    p = Uml("Подбор объектов")
+    X2 = 0
+    p.cls("ObjectMatcher", X2 + 230, 0, 400, ["- filters: List&lt;RequestFilter&gt;",
+                                              "- components: List&lt;ScoreComponent&gt;"],
+          ["+ standard(): ObjectMatcher", "+ passes(request, object): boolean", "+ score(request, object): double",
+           "+ match(request, objects, topN: int): List&lt;Match&gt;"])
+    p.cls("Match", X2 + 760, 30, 210, ["score: double", "object: PropertyObject"], [], stereo="record")
+    p.cls("RequestFilter", X2, 280, 360, [], ["+ accepts(request: BuyerRequest,", "    object: PropertyObject): boolean"],
+          stereo="interface")
+    p.cls("StandardFilter", X2 + 80, 440, 200, ["ON_SALE", "BUDGET", "ROOMS", "DISTRICT", "AREA", "FLOOR"],
+          ["+ BUDGET_TOLERANCE: double"], stereo="enumeration")
+    p.cls("ScoreComponent", X2 + 520, 280, 420, [], ["+ weight(): double",
+                                                    "+ part(request: BuyerRequest, object: PropertyObject): double",
+                                                    "+ score(request, object): double"], stereo="interface")
+    p.cls("WeightedScore", X2 + 620, 440, 220, ["- weight: double"], ["+ weight(): double"], abstract=True)
+    p.cls("PriceScore", X2 + 460, 600, 170, [], ["+ part(request, object)"])
+    p.cls("AreaScore", X2 + 645, 600, 170, [], ["+ part(request, object)"])
+    p.cls("DistrictScore", X2 + 830, 600, 170, [], ["+ part(request, object)"])
+    p.rel("uses", "ObjectMatcher", "RequestFilter", "1..*", exit_=(0.25, 1), entry=T)
+    p.rel("uses", "ObjectMatcher", "ScoreComponent", "1..*", exit_=(0.75, 1), entry=T)
+    p.rel("dep", "ObjectMatcher", "Match", "", exit_=(1, 0.3), entry=(0, 0.5))
+    p.rel("implements", "StandardFilter", "RequestFilter")
+    p.rel("implements", "WeightedScore", "ScoreComponent")
+    for k in ("PriceScore", "AreaScore", "DistrictScore"):
+        p.rel("extends", k, "WeightedScore", entry=B)
+    pages.append(p)
+
+    # ---------------- 4. Алгоритмы 3 и 4
+    p = Uml("Контроль сделки и расчёт комиссии")
+    p.cls("DealInspector", 230, 0, 330, ["- checks: List&lt;DealCheck&gt;"],
+          ["+ standard(types: List&lt;DocumentType&gt;): DealInspector",
+           "+ inspect(deal: Deal, today: LocalDate): DealReport"])
+    p.cls("DealReport", 650, 0, 280, ["- issues: List&lt;Issue&gt;"],
+          ["+ isReady(): boolean", "+ subjects(kind: IssueKind): List&lt;String&gt;",
+           "+ requiresAmlControl(): boolean"])
+    p.cls("Issue", 650, 200, 170, ["kind: IssueKind", "subject: String"], [], stereo="record")
+    p.cls("IssueKind", 650, 330, 240, ["MISSING", "EXPIRED", "EXPIRING", "OVERDUE_STAGE", "AML_CONTROL"],
+          ["+ isBlocking(): boolean", "+ title(): String"], stereo="enumeration")
+    p.cls("DealCheck", 150, 200, 420, [], ["+ check(deal: Deal, today: LocalDate, report: DealReport)"],
+          stereo="interface")
+    p.cls("DocumentCheck", 0, 360, 290, ["+ WARN_DAYS: int", "- types: List&lt;DocumentType&gt;"],
+          ["+ requiredTypes(deal): List&lt;DocumentType&gt;", "+ index(documents): Map&lt;String, Document&gt;"])
+    p.cls("StageDeadlineCheck", 310, 360, 150, [], [])
+    p.cls("AmlThresholdCheck", 480, 360, 150, ["- threshold: long"], [])
+    p.rel("uses", "DealInspector", "DealCheck", "1..*", exit_=B, entry=(0.55, 0))
+    p.rel("dep", "DealInspector", "DealReport", "", exit_=R, entry=L)
+    p.rel("has", "DealReport", "Issue", "0..*", exit_=(0.3, 1), entry=(0.3, 0))
+    p.rel("assoc", "Issue", "IssueKind", "1", exit_=(0.3, 1), entry=(0.2, 0))
+    p.rel("dep", "DealCheck", "DealReport", "", exit_=(1, 0.5), entry=(0, 0.8))
+    for k, e in (("DocumentCheck", (0.2, 1)), ("StageDeadlineCheck", (0.55, 1)), ("AmlThresholdCheck", (0.9, 1))):
+        p.rel("implements", k, "DealCheck", entry=e)
+
+    Y4 = 540
+    p.cls("CommissionCalculator", 280, Y4, 360, ["- feePolicy: FeePolicy", "- scale: RewardScale"],
+          ["+ standard(): CommissionCalculator", "+ monthly(deals, month: YearMonth): MonthlyReport"])
+    p.cls("FeePolicy", 0, Y4 + 200, 200, [], ["+ fee(deal: Deal): long"], stereo="interface")
+    p.cls("PercentFeeWithMinimum", 0, Y4 + 330, 200, ["- minFee: long"], [])
+    p.cls("RewardScale", 280, Y4 + 200, 330, [], ["+ share(fee: long, accumulated: long): long"],
+          stereo="interface")
+    p.cls("ProgressiveScale", 330, Y4 + 330, 230, ["- tiers: List&lt;Tier&gt;"], ["+ standard(): ProgressiveScale"])
+    p.cls("Tier", 380, Y4 + 480, 130, ["upper: double", "rate: double"], [], stereo="record")
+    p.cls("MonthlyReport", 720, Y4, 270, ["month: YearMonth", "lines: List&lt;CommissionLine&gt;",
+                                          "agents: SortedMap&lt;Integer, AgentTotal&gt;"],
+          ["+ totalFee(): long", "+ totalAgentShare(): long", "+ agencyIncome(): long"], stereo="record")
+    p.cls("CommissionLine", 690, Y4 + 250, 160, ["dealId: int", "agentId: int", "fee: long", "agentShare: long"],
+          [], stereo="record")
+    p.cls("AgentTotal", 870, Y4 + 250, 140, ["fee: long", "agentShare: long"], [], stereo="record")
+    p.rel("assoc", "CommissionCalculator", "FeePolicy", "1", exit_=(0.15, 1), entry=T)
+    p.rel("assoc", "CommissionCalculator", "RewardScale", "1", exit_=(0.5, 1), entry=T)
+    p.rel("implements", "PercentFeeWithMinimum", "FeePolicy")
+    p.rel("implements", "ProgressiveScale", "RewardScale", entry=(0.5, 1))
+    p.rel("has", "ProgressiveScale", "Tier", "1..*")
+    p.rel("dep", "CommissionCalculator", "MonthlyReport", "", exit_=R, entry=(0, 0.3))
+    p.rel("has", "MonthlyReport", "CommissionLine", "0..*", exit_=(0.3, 1), entry=T)
+    p.rel("has", "MonthlyReport", "AgentTotal", "0..*", exit_=(0.85, 1), entry=T)
+    pages.append(p)
+    save("uml-klassy.drawio", pages)
+
+
 if __name__ == "__main__":
-    bpmn()
-    er()
-    algorithms()
+    import sys
+    targets = sys.argv[1:] or ["bpmn", "er", "algorithms", "uml"]
+    for name in targets:
+        globals()[name]()
